@@ -1,0 +1,13 @@
+services:
+  mi-garaje:
+    build: .
+    container_name: mi-garaje
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_PATH: /app/data/mi-garaje.sqlite
+    volumes:
+      - ./data:/app/data
