@@ -29,8 +29,16 @@ async function migrate(db) {
     CREATE TABLE IF NOT EXISTS vehicles (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
+      brand TEXT NOT NULL DEFAULT '',
+      model TEXT NOT NULL DEFAULT '',
       plate TEXT NOT NULL,
       type TEXT NOT NULL,
+      vehicle_kind TEXT NOT NULL DEFAULT '',
+      itv_category TEXT NOT NULL DEFAULT '',
+      registration_date TEXT NOT NULL DEFAULT '',
+      insurance_expiry TEXT NOT NULL DEFAULT '',
+      insurance_company TEXT NOT NULL DEFAULT '',
+      insurance_price REAL NOT NULL DEFAULT 0,
       current_km INTEGER NOT NULL DEFAULT 0,
       notes TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -64,5 +72,39 @@ async function migrate(db) {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
   `);
+
+  await ensureColumn(db, 'vehicles', 'registration_date', "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn(db, 'vehicles', 'brand', "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn(db, 'vehicles', 'model', "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn(db, 'vehicles', 'vehicle_kind', "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn(db, 'vehicles', 'itv_category', "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn(db, 'vehicles', 'insurance_expiry', "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn(db, 'vehicles', 'insurance_company', "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn(db, 'vehicles', 'insurance_price', "REAL NOT NULL DEFAULT 0");
+  await backfillVehicleBrandModel(db);
+  await db.run("UPDATE vehicles SET itv_category = type WHERE itv_category = ''");
+}
+
+async function ensureColumn(db, table, column, definition) {
+  const columns = await db.all(`PRAGMA table_info(${table})`);
+  if (!columns.some((item) => item.name === column)) {
+    await db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+async function backfillVehicleBrandModel(db) {
+  const vehicles = await db.all("SELECT id, name, brand, model FROM vehicles WHERE brand = '' OR model = ''");
+  for (const vehicle of vehicles) {
+    const parts = String(vehicle.name || '').trim().split(/\s+/);
+    const brand = vehicle.brand || parts.shift() || vehicle.name || '';
+    const model = vehicle.model || parts.join(' ');
+    await db.run('UPDATE vehicles SET brand = ?, model = ? WHERE id = ?', brand, model, vehicle.id);
+  }
 }
